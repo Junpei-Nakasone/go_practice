@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 )
@@ -16,26 +16,8 @@ type JwtClaims struct {
 	jwt.StandardClaims
 }
 
-func getMember(c echo.Context) error {
-	memberName := c.QueryParam("name")
-	memberAge := c.QueryParam("age")
-
-	dataType := c.Param("data")
-
-	if dataType == "string" {
-		return c.String(http.StatusOK, fmt.Sprintf("The member name is %s\nand %s years old", memberName, memberAge))
-	}
-
-	if dataType == "json" {
-		return c.JSON(http.StatusOK, map[string]string{
-			"name": memberName,
-			"type": memberAge,
-		})
-	}
-	return c.JSON(http.StatusBadRequest, map[string]string{
-		"error": "you need to specify the member's name/age.",
-	})
-
+func hello(c echo.Context) error {
+	return c.String(http.StatusOK, "Hello world!")
 }
 
 func mainJwt(c echo.Context) error {
@@ -50,46 +32,39 @@ func mainJwt(c echo.Context) error {
 }
 
 func login(c echo.Context) error {
-	username := c.QueryParam("name")
+	username := c.QueryParam("username")
 	password := c.QueryParam("password")
 
-	if username == "jack" && password == "1234" {
-		cookie := &http.Cookie{}
+	// check username and password against DB after hashing the password
+	if username == "nakasone" && password == "password" {
 
-		// this is the same
-		//cookie := new(http.Cookie)
-
-		cookie.Name = "sessionID"
-		cookie.Value = "some_string"
-		cookie.Expires = time.Now().Add(48 * time.Hour)
-
-		c.SetCookie(cookie)
-
-		// create JWT token
+		// create jwt token
 		token, err := createJwtToken()
 		if err != nil {
-			log.Println("Error Occured.", err)
-			return c.String(http.StatusInternalServerError, "Something went wrong")
+			log.Println("Error Creating JWT token", err)
+			return c.String(http.StatusInternalServerError, "something went wrong")
 		}
-		jwtCookie := &http.Cookie{}
 
-		jwtCookie.Name = "JWTCookie"
-		jwtCookie.Value = token
-		jwtCookie.Expires = time.Now().Add(24 * time.Hour)
+		JwtCookie := &http.Cookie{}
 
-		c.SetCookie(jwtCookie)
+		JwtCookie.Name = "JWTCookie"
+		JwtCookie.Value = token
+		JwtCookie.Expires = time.Now().Add(48 * time.Hour)
+
+		c.SetCookie(JwtCookie)
 
 		return c.JSON(http.StatusOK, map[string]string{
-			"message": "You logged in.",
+			"message": "You were logged in!",
 			"token":   token,
 		})
 	}
-	return c.String(http.StatusUnauthorized, "Your name or password is invalid")
+
+	return c.String(http.StatusUnauthorized, "Your username or password were wrong")
 }
 
 func createJwtToken() (string, error) {
 	claims := JwtClaims{
-		"jack",
+		"nakasone",
 		jwt.StandardClaims{
 			Id:        "main_user_id",
 			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
@@ -107,7 +82,7 @@ func createJwtToken() (string, error) {
 }
 
 func main() {
-	fmt.Println("WELCOME To SERVER")
+	fmt.Println("Welcome to the server")
 
 	e := echo.New()
 
@@ -116,16 +91,14 @@ func main() {
 	jwtGroup.Use(middleware.JWTWithConfig(middleware.JWTConfig{
 		SigningMethod: "HS512",
 		SigningKey:    []byte("mySecret"),
-		TokenLookup:   "Cookie:JWTCookie",
+		TokenLookup:   "cookie:JWTCookie",
 	}))
 
 	jwtGroup.GET("/main", mainJwt)
 
-	e.GET("/", func(c echo.Context) error {
-		return c.String(http.StatusOK, "HELLO FROM WEBSite")
-	})
-	e.GET("/member/:data", getMember)
-	e.GET("login", login)
+	e.GET("/login", login)
+	e.GET("/", hello)
 
 	e.Start(":8000")
+
 }
